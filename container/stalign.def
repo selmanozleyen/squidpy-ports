@@ -19,7 +19,7 @@ From: nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
     src /opt/squidpy-ports/src
     # Vendored upstream STalign (pinned submodule) carries its own notebooks AND the
     # example datasets, so the image is self-contained and needs no network at run time.
-    vendor /opt/squidpy-ports/vendor
+    vendor/STalign /opt/squidpy-ports/vendor/STalign
     # The public-API notebooks the container executes.
     docs/notebooks/squidpy-api /opt/squidpy-ports/docs/notebooks/squidpy-api
 

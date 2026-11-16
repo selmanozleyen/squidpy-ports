@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import sys
 
 import numpy as np
 import pytest
@@ -19,8 +20,11 @@ def _run(tangram, **kwargs):
 @pytest.mark.parametrize("density_prior", F.SETTINGS)
 def test_observes_the_initial_mapping(tangram, density_prior):
     """The recorded start is upstream's seeded draw, and the genes are projected through the mapping."""
+    mapper = sys.modules["tangram.mapping_optimizer"].Mapper
+
     out = _run(tangram, density_prior=density_prior)
 
+    assert sys.modules["tangram.mapping_optimizer"].Mapper is mapper  # restored
     np.random.seed(F.RANDOM_STATE)  # the legacy global RNG is what upstream seeds
     expected = np.random.normal(0, 1, (F.N_REF, F.N_QUERY)).astype(np.float32)
     np.testing.assert_array_equal(out["initial_logits"], expected)

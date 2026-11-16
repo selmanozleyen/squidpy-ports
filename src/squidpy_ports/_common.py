@@ -176,9 +176,17 @@ def differing(a: Mapping[str, Any], b: Mapping[str, Any], prefix: str = "") -> l
             out.append(path)
         elif isinstance(a[key], Mapping) and isinstance(b[key], Mapping):
             out += differing(a[key], b[key], f"{path}/")
-        elif not np.array_equal(a[key], b[key]):
+        elif not _equal(a[key], b[key]):
             out.append(path)
     return out
+
+
+def _equal(a: Any, b: Any) -> bool:
+    """Equal values, NaN equal to NaN, and numbers only at the same dtype."""
+    a, b = np.asarray(a), np.asarray(b)
+    if a.dtype.kind in "biufc" or b.dtype.kind in "biufc":
+        return a.dtype == b.dtype and np.array_equal(a, b, equal_nan=a.dtype.kind in "fc")
+    return np.array_equal(a, b)
 
 
 def generator_main(build: Callable[[], dict[str, Any]], env: dict[str, str], argv: list[str] | None, doc: str) -> int:
@@ -187,8 +195,10 @@ def generator_main(build: Callable[[], dict[str, Any]], env: dict[str, str], arg
     parser.add_argument("--out", type=Path, required=True, help="the .zarr.zip store to write")
     args = parser.parse_args(argv)
     for var, value in env.items():
-        if os.environ.get(var) != value:
-            raise RuntimeError(f"{var} must be {value} before Python starts. Use `hatch run <method>:generate`.")
+        # `python -E` ignores PYTHONHASHSEED while it still shows in os.environ
+        unset = sys.flags.hash_randomization if var == "PYTHONHASHSEED" else False
+        if os.environ.get(var) != value or unset:
+            raise RuntimeError(f"{var} must be {value} before Python starts; see the `generate` workflow.")
     write_bundle(build(), args.out)
     print(f"wrote {args.out}")
     return 0

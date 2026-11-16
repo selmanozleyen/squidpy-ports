@@ -14,8 +14,11 @@ from squidpy_ports.spage import generate, upstream
 def test_hard_coded_settings_leave_spage_unchanged(spage):
     data = F.make_data()
     ref, query = pd.DataFrame(data.ref, columns=data.genes), pd.DataFrame(data.query, columns=data.measured)
+    patched = spage.PVComputation, spage.NearestNeighbors
 
     out = upstream.run(spage, data, n_pv=F.N_PV)
+
+    assert (spage.PVComputation, spage.NearestNeighbors) == patched  # restored, so the call below is upstream's own
 
     expected = spage.SpaGE(query, ref, F.N_PV, genes_to_predict=data.unmeasured)
     np.testing.assert_array_equal(out["imputed"], expected.to_numpy())

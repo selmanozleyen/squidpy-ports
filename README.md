@@ -59,7 +59,7 @@ inputs defined in this repository — no upstream data is copied or redistribute
 | `vendor/Tangram`, `src/squidpy_ports/tangram/` | The same for Tangram; writes `tangram_reference.zarr.zip`. |
 | `src/squidpy_ports/_common.py` | What every method shares: the pin check and by-path import, the bundle format and its provenance, the generators' CLI, and the bundle comparison the workflow runs. |
 
-Upstream is imported by path rather than installed because its `setup.py` reads
+Every upstream is imported by path rather than installed. STalign's `setup.py` reads
 `requirements.txt` verbatim and pins `numpy==1.23.4` / `torch==2.0.0` / `Pillow==9.5.0`,
 none of which resolve on a current Python. Vendoring makes those pins irrelevant;
 `uv.lock` supplies the reproducibility instead.
@@ -82,7 +82,7 @@ To keep the environments side by side locally, give each its own directory with
 `hatch run spage:test` and `hatch run spage:generate --out spage_reference.zarr.zip`, which also set
 the variables the generators require (single-threaded BLAS, and for Tangram `PYTHONHASHSEED=0`), but
 hatch resolves fresh versions rather than reading `uv.lock`. `tests/test_common.py` guards what the
-methods share and needs only the base install; `tests/test_<method>_generator.py` guards each
+methods share and needs only the base install and the `test` extra; `tests/test_<method>_generator.py` guards each
 generator and needs the `vendor/<upstream>` submodule.
 
 ## Publishing the reference bundle

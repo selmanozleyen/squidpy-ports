@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import numpy as np
 import pytest
 
@@ -35,6 +37,38 @@ def test_differing_ignores_provenance_only():
     b["fixtures"] = {"params": {"a": np.ones(1)}}
     a["fixtures"] = {"params": {"a": np.zeros(1)}}
     assert _common.differing(a, b) == ["fixtures/params/a", "run/x", "run/y"]
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "equal"),
+    [
+        (np.array([np.nan, 1.0]), np.array([np.nan, 1.0]), True),
+        (np.array([1, 2]), np.array([1.0, 2.0]), False),
+        (np.array(["g0", "g1"]), np.array(["g0", "g1"], dtype=object), True),
+        ("none", "none", True),
+        (3, 3, True),
+    ],
+)
+def test_differing_values(a, b, equal):
+    assert (_common.differing({"x": a}, {"x": b}) == []) == equal
+
+
+def test_main_compares_bundles(tmp_path, capsys):
+    for name, x in (("a", 0.0), ("b", 0.0), ("c", 1.0)):
+        _common.write_bundle({"run": {"x": np.array([x])}}, tmp_path / f"{name}.zarr.zip")
+
+    assert _common.main([str(tmp_path / "a.zarr.zip"), str(tmp_path / "b.zarr.zip")]) == 0
+    with pytest.raises(SystemExit, match="run/x"):
+        _common.main([str(tmp_path / "a.zarr.zip"), str(tmp_path / "c.zarr.zip")])
+
+
+def test_import_vendored(tmp_path):
+    (tmp_path / "vendored_probe_mod.py").write_text("X = 1\n")
+
+    assert _common.import_vendored(tmp_path, "vendored_probe_mod").X == 1
+    assert str(tmp_path) not in sys.path
+    with pytest.raises(RuntimeError, match="not from"):
+        _common.import_vendored(tmp_path, "json")  # already imported from the stdlib
 
 
 def test_verify_pin(tmp_path):

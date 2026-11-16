@@ -57,7 +57,11 @@ def test_energy_and_gradient_spies_agree_with_the_loop(stalign):
         **F.LDDMM_PARAMS,
     }
 
+    import torch
+
+    patched = stalign.to_A, torch.Tensor.backward
     _, captured = upstream.lddmm_with_grads(stalign, niter=1, L=lin, T=trans, **kwargs)
+    assert (stalign.to_A, torch.Tensor.backward) == patched  # restored
     two = stalign.LDDMM(niter=2, L=lin, T=trans, **kwargs)
 
     scale = 1.0 + 9.0 * (0 >= F.LDDMM_PARAMS["diffeo_start"])
@@ -95,3 +99,17 @@ def test_fixture_transform_is_not_round(name):
     """
     value = np.atleast_1d(getattr(F, name)).astype(float)
     assert np.all(np.abs(value - np.round(value, 2)) > 1e-6)
+
+
+def test_bundle_fixtures_round_trip(stalign, tmp_path):
+    """The bundle's ``fixtures``, and a section with its provenance, survive the store."""
+    from squidpy_ports._common import differing, read_bundle, write_bundle
+    from squidpy_ports.stalign import generate
+
+    uns = generate._uns({"probe": {"x": [1.0, 2.0], "provenance": generate._provenance(section="probe")}})
+    write_bundle(uns, tmp_path / "bundle.zarr.zip")
+
+    read = read_bundle(tmp_path / "bundle.zarr.zip")
+    assert differing(uns, read) == []
+    for key in ("ports_commit", "torch", "numpy", "python", "platform", "generated_utc"):  # what squidpy's test reads
+        assert read["probe"]["provenance"][key]
