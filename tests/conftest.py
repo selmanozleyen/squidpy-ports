@@ -1,12 +1,18 @@
+import importlib
+
 import pytest
 
-from squidpy_ports.stalign import upstream
+
+def _vendored(method: str):
+    @pytest.fixture(scope="session", name=method)
+    def fixture():
+        """The vendored upstream, loaded and pin-checked, or a skip if its submodule is not checked out."""
+        try:
+            return importlib.import_module(f"squidpy_ports.{method}.upstream").load()
+        except FileNotFoundError as exc:
+            pytest.skip(str(exc))
+
+    return fixture
 
 
-@pytest.fixture(scope="session")
-def stalign():
-    """The vendored upstream STalign module, or a skip if it is not checked out."""
-    try:
-        return upstream.load()
-    except FileNotFoundError as exc:
-        pytest.skip(str(exc))
+stalign, spage, tangram = map(_vendored, ("stalign", "spage", "tangram"))

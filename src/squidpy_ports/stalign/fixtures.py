@@ -6,10 +6,9 @@ from the bundle rather than from this file. It depends on **numpy only**.
 
 from __future__ import annotations
 
-import hashlib
-from pathlib import Path
-
 import numpy as np
+
+from squidpy_ports._common import checksum as _checksum
 
 __all__ = [
     "LDDMM_PARAMS",
@@ -159,4 +158,4 @@ def make_clouds() -> Clouds:
 
 def checksum() -> str:
     """SHA-256 of this file, so both copies can prove they are the same file."""
-    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    return _checksum(__file__)

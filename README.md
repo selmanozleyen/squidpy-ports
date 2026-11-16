@@ -12,7 +12,7 @@ claims to be without anyone noticing. This repository runs the *original* implem
 — vendored and pinned — and emits the numbers squidpy's tests compare against, so the
 heavyweight reference dependencies never enter squidpy itself.
 
-Currently covers: **STalign** (see [scverse/squidpy#1243]).
+Currently covers: **STalign** (see [scverse/squidpy#1243]), **SpaGE** ([below](#spage)) and **Tangram** ([below](#tangram)).
 
 [scverse/squidpy#1243]: https://github.com/scverse/squidpy/issues/1243
 
@@ -21,7 +21,7 @@ Currently covers: **STalign** (see [scverse/squidpy#1243]).
 | | |
 | --- | --- |
 | **squidpy API equivalence** | [Sixteen of STalign's seventeen analyses][api], rewritten against `squidpy.experimental.tl` and executed on a GPU — one page per upstream notebook, each linking the original it mirrors. |
-| **Numerical tests** | [`tests/test_generator.py`][ports-tests] guards this repo's own inputs — the vendored pin, the fixture definitions, the provenance stamp. The port itself is asserted against upstream at rank 2 and rank 3 in squidpy, by [`test_stalign_reference.py`][ref-tests], which downloads the bundle this repo publishes. |
+| **Numerical tests** | [`tests/test_stalign_generator.py`][ports-tests] guards this repo's own inputs — the vendored pin, the fixture definitions, the provenance stamp. The port itself is asserted against upstream at rank 2 and rank 3 in squidpy, by [`test_stalign_reference.py`][ref-tests], which downloads the bundle this repo publishes. |
 | **Reference bundle** | [What it holds and why it is stored][bundle]; [publishing a new one](#publishing-the-reference-bundle). |
 | **Reproduce on any GPU box** | [`container/README.md`][container] — one pinned container, any GPU box. |
 
@@ -40,9 +40,9 @@ what produces the references: the vendored upstream, the generator, and the publ
 
 ## Licensing
 
-This repository is BSD-3-Clause. The vendored upstream at `vendor/STalign` is
-**GPL-3.0** ([`LICENSE.vendor`][license-vendor]) and is included as a git submodule, not
-redistributed as part of any built artifact. Nothing is published to PyPI.
+This repository is BSD-3-Clause. The vendored upstreams are included as git submodules, not
+redistributed as part of any built artifact: `vendor/STalign` is **GPL-3.0**, `vendor/SpaGE` is
+**MIT** and `vendor/Tangram` is **BSD-3-Clause**, all recorded in [`LICENSE.vendor`][license-vendor]. Nothing is published to PyPI.
 
 The reference bundle holds numerical outputs computed from synthetic, seeded
 inputs defined in this repository — no upstream data is copied or redistributed.
@@ -55,8 +55,11 @@ inputs defined in this repository — no upstream data is copied or redistribute
 | `src/squidpy_ports/stalign/fixtures.py` | Input definitions, shared by the generator and the tests; depends on numpy only. |
 | `src/squidpy_ports/stalign/upstream.py` | Loads upstream by path, asserts the pin, and observes the LDDMM loop. |
 | `src/squidpy_ports/stalign/generate.py` | Writes the reference bundle, `stalign_reference.zarr.zip`. |
+| `vendor/SpaGE`, `src/squidpy_ports/spage/` | The same for SpaGE; writes `spage_reference.zarr.zip`. |
+| `vendor/Tangram`, `src/squidpy_ports/tangram/` | The same for Tangram; writes `tangram_reference.zarr.zip`. |
+| `src/squidpy_ports/_common.py` | What every method shares: the pin check and by-path import, the bundle format and its provenance, the generators' CLI, and the bundle comparison the workflow runs. |
 
-Upstream is imported by path rather than installed because its `setup.py` reads
+Every upstream is imported by path rather than installed. STalign's `setup.py` reads
 `requirements.txt` verbatim and pins `numpy==1.23.4` / `torch==2.0.0` / `Pillow==9.5.0`,
 none of which resolve on a current Python. Vendoring makes those pins irrelevant;
 `uv.lock` supplies the reproducibility instead.
@@ -64,18 +67,28 @@ none of which resolve on a current Python. Vendoring makes those pins irrelevant
 Nothing here reimplements upstream — every value comes from calling a public upstream function or
 observing the unmodified `LDDMM` loop.
 
-## Running the tests
+## Environments and tests
+
+Each method has its own extra in `pyproject.toml` (`stalign`, `spage`, `tangram`) holding only what
+its upstream imports, so each runs in its own environment. CI tests and generates every method in
+its own job, from `uv.lock`:
 
 ```bash
-uv sync --frozen --extra test && uv run pytest
+uv sync --frozen --extra test --extra spage && uv run --no-sync pytest tests/test_common.py tests/test_spage_generator.py
 ```
 
-The same commands CI runs, from `uv.lock`: the environment the bundle is generated in.
-`tests/test_generator.py` guards the generator and needs the `vendor/STalign` submodule.
+To keep the environments side by side locally, give each its own directory with
+`UV_PROJECT_ENVIRONMENT=.venv-spage`. The hatch environments of the same names are a shortcut,
+`hatch run spage:test` and `hatch run spage:generate --out spage_reference.zarr.zip`, which also set
+the variables the generators require (single-threaded BLAS, and for Tangram `PYTHONHASHSEED=0`), but
+hatch resolves fresh versions rather than reading `uv.lock`. `tests/test_common.py` guards what the
+methods share and needs only the base install and the `test` extra; `tests/test_<method>_generator.py` guards each
+generator and needs the `vendor/<upstream>` submodule.
 
 ## Publishing the reference bundle
 
-The `Generate reference bundle` workflow writes `stalign_reference.zarr.zip`, an AnnData written to a zipped zarr store (each
+The `Generate reference bundle` workflow writes one bundle per method, each in its own job. For
+STalign it writes `stalign_reference.zarr.zip`, an AnnData written to a zipped zarr store (each
 section a dict of arrays in `uns`, with its provenance; the fixture parameters in
 `uns["fixtures"]`), checks
 that a second run gives identical arrays, and uploads it as a run artifact. Publish it by hand:
@@ -89,8 +102,65 @@ gh release create stalign-reference-vN stalign_reference.zarr.zip -R theislab/sq
 
 Then point squidpy's `test_stalign_reference.py` at the new URL and the sha256 the workflow
 prints: it pins that one build (provenance timestamps differ between builds, the arrays do not). It runs on ubuntu because BLAS/FFT reduction order
-differs across platforms; `hatch run generate:run --out stalign_reference.zarr.zip` writes the
-same store locally.
+differs across platforms. Locally, the workflow's commands write the same store from the same lockfile.
+
+## SpaGE
+
+squidpy ports SpaGE gene imputation as `squidpy.experimental.tl.impute_spage`. Upstream
+([tabdelaal/SpaGE]) is vendored at `vendor/SpaGE`, pinned to `edd0fb7`, and imported by path: it
+has no `setup.py`, and `main.py` imports its siblings as `SpaGE.*`.
+
+`SpaGE()` hard-codes a cosine threshold of 0.3 and 50 neighbors. `spage.upstream.run` swaps both
+for the length of one call by replacing `PVComputation` and `NearestNeighbors` in `SpaGE.main`'s
+namespace, and observes the number of principal vectors used, the cosine similarities, and the
+query cells whose `n_neighbors`-th neighbor ties with the next one. At the hard-coded settings it
+returns exactly what `SpaGE()` does, which `tests/test_spage_generator.py` asserts.
+
+`spage_reference.zarr.zip` is the same format as the STalign bundle:
+
+| `uns` key | What it holds |
+| --- | --- |
+| `fixtures` | `SEED`, `N_PV`, `COSINE_THRESHOLDS` and `N_NEIGHBORS` (one entry per run), the gene names (`genes`, `measured`, `unmeasured`), and the checksum of `spage/fixtures.py`. |
+| `inputs` | `ref` (300 x 12), `query` (150 x 8, the first 8 genes), and `truth`, the query's true values of the 4 unmeasured genes. The same arrays as `_data()` in squidpy's `test_impute_spage.py`. |
+| `cosine{30,99}_k{20,50,300}` | One run of upstream at `n_pv=3`: `imputed` (150 x 4), `n_pv_used`, `cosine`, `tied_rows`, `cosine_threshold`, `n_neighbors`, and the provenance. |
+
+The fixture has two reference cells that are zero on every measured gene, so they are at the same
+distance from every query cell. Where they straddle the `n_neighbors`-th neighbor, which one is kept
+is the search backend's choice, so a correct port may differ from upstream on exactly the rows in
+`tied_rows`, and must match it everywhere else.
+
+The workflow publishes it as the `spage-reference-bundle` artifact; release it as for STalign, with a
+`spage-reference-vN` tag.
+
+[tabdelaal/SpaGE]: https://github.com/tabdelaal/SpaGE
+
+## Tangram
+
+squidpy ports Tangram's `"cells"` mode as `squidpy.experimental.tl.impute_tangram`. Upstream
+([broadinstitute/Tangram]) is vendored at `vendor/Tangram`, pinned to `4c68995`, and imported by
+path. `tangram.upstream.run` calls its public API as the tutorial does (`pp_adatas`,
+`map_cells_to_space`, `project_genes`), with two inputs in the form upstream still accepts on current
+dependencies: the reference as a `scipy.sparse.csr_matrix`, since a dense one fails in upstream, and
+the density prior as a list of the values `pp_adatas` computed, since upstream fails on both its name
+and an ndarray. It observes the initial mapping by subclassing `Mapper` for the length of one call.
+
+Upstream weighs the density term 1 whenever a prior is given, so its three `density_prior` choices are
+the same as squidpy's. Its random start comes from numpy's legacy global RNG, which squidpy does not
+use, so the bundle stores it: a port reproduces the trajectory only from the same start. Upstream also
+orders the training genes by iterating a set, so the generator needs `PYTHONHASHSEED=0`, and the bundle
+stores that order.
+
+| `uns` key | What it holds |
+| --- | --- |
+| `fixtures` | `SEED`, `RANDOM_STATE`, `LEARNING_RATE`, `SETTINGS`, `EPOCHS`, the gene names, and the checksum of `tangram/fixtures.py`. |
+| `inputs` | `ref` (60 x 10), `query` (40 x 7), `truth` (40 x 3), the same arrays as `_data()` in squidpy's `test_impute_tangram.py`; and upstream's `initial_logits` (60 x 40, float32) and `training_genes`. |
+| `{rna_count_based,uniform,none}_epochs{1,10,100,300}` | One run of upstream: `probs` (60 x 40), `imputed` (40 x 3), the per-epoch `main_loss` and `total_loss`, and with a prior its `density` and per-epoch `kl_reg`; `density_prior`, `num_epochs`, and the provenance. |
+
+Upstream computes in float32. Over 300 epochs float32 rounding grows to about 1e-2 in the mapping: a
+float64 run of the same algorithm differs from a float32 one by that much. Comparisons after 1, 10
+and 100 epochs can be tight; after 300 they need that slack.
+
+[broadinstitute/Tangram]: https://github.com/broadinstitute/Tangram
 
 ## Contact
 
@@ -98,7 +168,7 @@ For questions and help requests, you can reach out in the [scverse discourse][].
 If you found a bug, please use the [issue tracker][].
 
 [api]: https://theislab.github.io/squidpy-ports/squidpy-api.html
-[ports-tests]: https://github.com/theislab/squidpy-ports/blob/main/tests/test_generator.py
+[ports-tests]: https://github.com/theislab/squidpy-ports/blob/main/tests/test_stalign_generator.py
 [bundle]: https://theislab.github.io/squidpy-ports/reference-bundle.html
 [ref-tests]: https://github.com/scverse/squidpy/blob/main/tests/experimental/tl/test_stalign_reference.py
 [container]: https://github.com/theislab/squidpy-ports/blob/main/container/README.md

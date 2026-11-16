@@ -8,62 +8,33 @@ keeps a GPL-3.0 project out of this package's dependency metadata.
 
 from __future__ import annotations
 
-import hashlib
-import importlib.util
 from functools import cache
-from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-__all__ = ["UPSTREAM_SHA", "UPSTREAM_URL", "load", "lddmm_with_grads", "vendor_root"]
+from squidpy_ports._common import ROOT, import_vendored, verify_pin
+
+__all__ = ["UPSTREAM_SHA", "UPSTREAM_URL", "VENDOR", "load", "lddmm_with_grads"]
 
 #: The single upstream commit this package is a reference for. Upstream has no tags and
 #: no releases; without a pin, "correct" silently changes under us.
 UPSTREAM_SHA = "b2068edc98974efa54537eca194736e177bbe11d"
 UPSTREAM_URL = "https://github.com/JEFworks-Lab/STalign"
-#: sha256 of ``STalign/STalign.py`` at :data:`UPSTREAM_SHA`, so the pin is checked on the code
-#: that runs, with or without git metadata (the container ships the tree without ``.git``).
-STALIGN_PY_SHA256 = "4a0833dd554330515f949ff3bc1fcbb6ce9be17088d05a33b09bb2f12d71fac5"
-
-
-def vendor_root() -> Path:
-    """Path to the vendored upstream checkout."""
-    return Path(__file__).resolve().parents[3] / "vendor" / "STalign"
+#: sha256 of ``STalign/STalign.py`` at :data:`UPSTREAM_SHA` (the container ships the tree without ``.git``).
+SHA256 = {"STalign.py": "4a0833dd554330515f949ff3bc1fcbb6ce9be17088d05a33b09bb2f12d71fac5"}
+#: The vendored checkout.
+VENDOR = ROOT / "vendor" / "STalign"
 
 
 @cache
 def load() -> ModuleType:
-    """Import the vendored ``STalign.STalign`` module, asserting the pin.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the submodule is not checked out.
-    RuntimeError
-        If ``STalign.py`` is not the file at :data:`UPSTREAM_SHA`.
-    """
-    root = vendor_root()
-    path = root / "STalign" / "STalign.py"
-    if not path.is_file():
-        raise FileNotFoundError(f"vendored STalign missing at {path}; run `git submodule update --init`")
-
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    if digest != STALIGN_PY_SHA256:
-        raise RuntimeError(
-            f"vendored STalign.py has sha256 {digest}, not the file at {UPSTREAM_SHA}. Re-pin "
-            f"deliberately in upstream.py and regenerate the whole bundle -- a moved reference "
-            f"invalidates every tolerance downstream."
-        )
-
+    """Import the vendored ``STalign.STalign`` module, asserting the pin (see :func:`.verify_pin`)."""
+    verify_pin(VENDOR / "STalign", SHA256, UPSTREAM_SHA)
     import matplotlib
 
     # LDDMM creates figures unconditionally (STalign.py:1094, :1140, :1142).
     matplotlib.use("Agg")
-
-    spec = importlib.util.spec_from_file_location("_vendored_stalign", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = import_vendored(VENDOR, "STalign.STalign")
     _assert_meshgrid_is_ij()
     return module
 

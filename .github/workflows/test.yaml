@@ -24,10 +24,15 @@ defaults:
     shell: bash -euo pipefail {0}
 
 jobs:
-  # One job, from uv.lock: the environment the reference bundle is generated in, so the
-  # generator's guards test the torch and numpy that produce the numbers.
+  # One job per upstream, each from uv.lock with only that upstream's extra: the environment its
+  # reference bundle is generated in, so the generator's guards test the versions that produce the numbers.
   test:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        method: [stalign, spage, tangram]
+    name: test (${{ matrix.method }})
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -39,8 +44,8 @@ jobs:
           enable-cache: true
           python-version: "3.13"
       - name: Install from the lockfile
-        run: uv sync --frozen --extra test
+        run: uv sync --frozen --extra test --extra ${{ matrix.method }}
       - name: Run tests
         env:
           MPLBACKEND: agg
-        run: uv run pytest -v --color=yes
+        run: uv run --no-sync pytest -v --color=yes tests/test_common.py tests/test_${{ matrix.method }}_generator.py

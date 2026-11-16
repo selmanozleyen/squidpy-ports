@@ -2,7 +2,7 @@
 
 Run with::
 
-    hatch run generate:run --out stalign_reference.zarr.zip
+    hatch run stalign:generate --out stalign_reference.zarr.zip
 
 One AnnData in a zipped zarr store: each section a dict of arrays in ``uns``, with its
 provenance, and the fixture parameters in ``uns["fixtures"]``. squidpy's tests download the copy the
@@ -17,22 +17,17 @@ quoted verbatim with line references.
 
 from __future__ import annotations
 
-import argparse
-import os
-import platform
-import subprocess
-import sys
 import warnings
-from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+from squidpy_ports._common import THREADS, generator_main, provenance
+
 from . import fixtures as F
 from . import upstream
 
-__all__ = ["main"]
+__all__ = ["build", "main"]
 
 #: Iteration counts for the trajectory snapshots. 50 crosses the `it >= 50` gate at
 #: STalign.py:1233 where the mixture-weight E-step switches on; 1 and 5 sit below it.
@@ -42,19 +37,13 @@ CONVERGED_ITERS = 500
 
 
 def _pin_determinism() -> None:
-    """Fix reduction order so the emitted numbers are reproducible."""
+    """Fix reduction order so the emitted numbers are reproducible, and silence upstream's own noise."""
     import matplotlib
     import torch
 
-    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS"):
-        if os.environ.get(var) != "1":
-            raise RuntimeError(
-                f"{var} must be 1 before torch is imported, otherwise threaded BLAS "
-                f"reduction order varies run to run. Use `hatch run generate:run`."
-            )
     torch.set_num_threads(1)
     matplotlib.use("Agg")
-    # upstream's own noise; anything else stays visible
+    # anything else stays visible
     for message in (
         r"__array__ implementation doesn't accept a copy keyword",
         r"Data has no positive values, and therefore cannot be log-scaled",
@@ -65,34 +54,7 @@ def _pin_determinism() -> None:
 
 
 def _provenance(**extra: Any) -> dict[str, Any]:
-    """The provenance stamped into every section, so the outputs stay falsifiable."""
-    import torch
-
-    root = Path(__file__).resolve().parents[3]
-    try:
-        ports_commit = subprocess.run(
-            ["git", "-C", str(root), "describe", "--always", "--dirty", "--abbrev=40"],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.strip()
-    except subprocess.CalledProcessError:  # pragma: no cover - not a checkout
-        ports_commit = "unknown"
-
-    payload = {
-        "upstream_sha": upstream.UPSTREAM_SHA,
-        "upstream_url": upstream.UPSTREAM_URL,
-        "ports_commit": ports_commit,
-        "fixtures_checksum": F.checksum(),
-        "torch": str(torch.__version__),
-        "numpy": np.__version__,
-        "python": sys.version.split()[0],
-        "platform": platform.platform(),
-        # no argv: the --out path would make the bundle depend on where it was generated
-        "generated_utc": datetime.now(UTC).isoformat(),
-        **extra,
-    }
-    return payload
+    return provenance(upstream, F, ("torch", "numpy"), **extra)
 
 
 def _regularizer(xv, *, a: float, p: float):
@@ -832,12 +794,8 @@ def _smooth_velocity_3d(xv, nt: int) -> np.ndarray:
     return field / (xv[0].size * xv[1].size * xv[2].size)
 
 
-def _write_bundle(sections: dict[str, dict], out: Path) -> None:
-    """Write every section into ``uns`` of one AnnData, stored as a zipped zarr store at ``out``."""
-    import zipfile
-
-    import anndata as ad
-    from zarr.storage import MemoryStore
+def _uns(sections: dict[str, dict]) -> dict[str, Any]:
+    """Every section, and the fixture parameters in ``uns["fixtures"]``."""
 
     def arrays(section: dict) -> dict:
         return {key: value if key == "provenance" else np.asarray(value) for key, value in section.items()}
@@ -855,24 +813,11 @@ def _write_bundle(sections: dict[str, dict], out: Path) -> None:
         "SLICE_PARAMS": SLICE_PARAMS,
         "SLICE_ITERS": SLICE_ITERS,
     }
-    adata = ad.AnnData(uns={"fixtures": fixtures, **{name: arrays(section) for name, section in sections.items()}})
-    # written in memory and zipped once: anndata rewrites zarr.json while writing, which a
-    # ZipStore can only append (duplicate members), and a directory on a case-insensitive
-    # filesystem merges keys such as `A` and `a`
-    store: dict = {}
-    adata.write_zarr(MemoryStore(store_dict=store))
-    out.unlink(missing_ok=True)
-    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for key in sorted(store):
-            zf.writestr(key, store[key].to_bytes())
+    return {"fixtures": fixtures, **{name: arrays(section) for name, section in sections.items()}}
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Generate the whole bundle."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, required=True, help="the .zarr.zip store to write")
-    args = parser.parse_args(argv)
-
+def build() -> dict[str, Any]:
+    """Run every section and return the bundle's ``uns``."""
     _pin_determinism()
     st = upstream.load()
     clouds = F.make_clouds()
@@ -894,9 +839,12 @@ def main(argv: list[str] | None = None) -> int:
     import matplotlib.pyplot as plt
 
     plt.close("all")  # upstream leaks 4 figures per LDDMM call
-    _write_bundle(sections, args.out)
-    print(f"wrote {args.out}")
-    return 0
+    return _uns(sections)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Generate the whole bundle."""
+    return generator_main(build, THREADS, argv, __doc__)
 
 
 if __name__ == "__main__":

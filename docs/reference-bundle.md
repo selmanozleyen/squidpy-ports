@@ -61,5 +61,5 @@ gh release create stalign-reference-vN stalign_reference.zarr.zip -R theislab/sq
 ```
 
 Then point squidpy's `_BUNDLE_URL` and `_BUNDLE_SHA256` at the new asset and the hash the workflow
-prints. `hatch run generate:run --out stalign_reference.zarr.zip`
-writes the same store locally, but don't publish a local build.
+prints. The workflow's commands, which install from `uv.lock`, write the same store locally, but
+don't publish a local build.

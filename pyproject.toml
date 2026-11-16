@@ -20,26 +20,15 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
 ]
-# Upstream STalign is vendored (vendor/STalign), never pip-installed: its setup.py
-# reads requirements.txt verbatim and pins numpy==1.23.4 / torch==2.0.0 / Pillow==9.5.0,
-# none of which have cp312+ wheels. Vendoring makes those pins irrelevant; uv.lock
-# supplies the reproducibility instead, and the resolved versions are recorded in the
-# provenance stamped into every section of the reference bundle.
+# Every upstream is vendored under vendor/ and imported by path, never pip-installed (see each
+# `upstream.py` for why). Each has its own extra, so each runs in an environment holding only
+# what it imports; uv.lock supplies the reproducibility, and the resolved versions are recorded
+# in the provenance stamped into every section of a reference bundle.
 dependencies = [
   "anndata>=0.12",
-  # STalign.py imports all of these unconditionally at module level.
-  "matplotlib",
   "numpy",
-  "pandas",
-  "plotly",
-  "pynrrd",
-  "requests",
-  "scikit-image",
-  "scipy",
   # for debug logging (referenced from the issue template)
   "session-info2",
-  "torch",
-  "tornado",
   "zarr>=3",
 ]
 optional-dependencies.dev = [
@@ -56,6 +45,35 @@ optional-dependencies.doc = [
   "sphinx-copybutton",
   "sphinx-tabs",
   "sphinxext-opengraph",
+]
+# vendor/SpaGE imports these.
+optional-dependencies.spage = [
+  "pandas",
+  "scikit-learn",
+  "scipy",
+]
+# STalign.py imports all of these unconditionally at module level.
+optional-dependencies.stalign = [
+  "matplotlib",
+  "pandas",
+  "plotly",
+  "pynrrd",
+  "requests",
+  "scikit-image",
+  "scipy",
+  "torch",
+  "tornado",
+]
+# `import tangram` pulls in all of these, its plotting module included.
+optional-dependencies.tangram = [
+  "matplotlib",
+  "pandas",
+  "scanpy",
+  "scikit-learn",
+  "scipy",
+  "seaborn",
+  "torch",
+  "tqdm",
 ]
 optional-dependencies.test = [
   "coverage>=7.10",
@@ -77,17 +95,29 @@ scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
 scripts.open = "python -m webbrowser -t docs/_build/html/index.html"
 scripts.clean = "git clean -fdX -- {args:docs}"
 
-# Emit the reference bundle squidpy's STalign reference tests download (stalign_reference.zarr.zip).
-[tool.hatch.envs.generate]
+# One environment per upstream, all from the `ports` template (not meant to be run itself): `hatch run <method>:generate --out
+# <method>_reference.zarr.zip` writes the bundle squidpy's reference tests download, `hatch run
+# <method>:test` runs the guards. The variables are what the generators require: single-threaded BLAS so
+# reduction order is fixed, a non-interactive matplotlib backend because STalign's LDDMM draws
+# unconditionally, and a fixed hash seed because Tangram orders its training genes by iterating a set.
+[tool.hatch.envs.ports]
 installer = "uv"
-scripts.run = "python -m squidpy_ports.stalign.generate {args}"
+features = [ "test" ]
+scripts.generate = "python -m squidpy_ports.{env_name}.generate {args}"
+scripts.test = "pytest tests/test_common.py tests/test_{env_name}_generator.py {args}"
+env-vars = { MKL_NUM_THREADS = "1", MPLBACKEND = "agg", OMP_NUM_THREADS = "1", PYTHONHASHSEED = "0" }
 
-[tool.hatch.envs.generate.env-vars]
-# Determinism: single-threaded BLAS/FFT so reduction order is fixed, and a
-# non-interactive matplotlib backend because upstream LDDMM draws unconditionally.
-MKL_NUM_THREADS = "1"
-MPLBACKEND = "agg"
-OMP_NUM_THREADS = "1"
+[tool.hatch.envs.stalign]
+template = "ports"
+features = [ "stalign", "test" ]
+
+[tool.hatch.envs.spage]
+template = "ports"
+features = [ "spage", "test" ]
+
+[tool.hatch.envs.tangram]
+template = "ports"
+features = [ "tangram", "test" ]
 
 [tool.ruff]
 line-length = 120
