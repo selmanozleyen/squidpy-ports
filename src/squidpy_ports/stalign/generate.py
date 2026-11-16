@@ -29,6 +29,8 @@ from typing import Any
 
 import numpy as np
 
+from squidpy_ports._bundle import write_bundle
+
 from . import fixtures as F
 from . import upstream
 
@@ -834,10 +836,6 @@ def _smooth_velocity_3d(xv, nt: int) -> np.ndarray:
 
 def _write_bundle(sections: dict[str, dict], out: Path) -> None:
     """Write every section into ``uns`` of one AnnData, stored as a zipped zarr store at ``out``."""
-    import zipfile
-
-    import anndata as ad
-    from zarr.storage import MemoryStore
 
     def arrays(section: dict) -> dict:
         return {key: value if key == "provenance" else np.asarray(value) for key, value in section.items()}
@@ -855,16 +853,7 @@ def _write_bundle(sections: dict[str, dict], out: Path) -> None:
         "SLICE_PARAMS": SLICE_PARAMS,
         "SLICE_ITERS": SLICE_ITERS,
     }
-    adata = ad.AnnData(uns={"fixtures": fixtures, **{name: arrays(section) for name, section in sections.items()}})
-    # written in memory and zipped once: anndata rewrites zarr.json while writing, which a
-    # ZipStore can only append (duplicate members), and a directory on a case-insensitive
-    # filesystem merges keys such as `A` and `a`
-    store: dict = {}
-    adata.write_zarr(MemoryStore(store_dict=store))
-    out.unlink(missing_ok=True)
-    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for key in sorted(store):
-            zf.writestr(key, store[key].to_bytes())
+    write_bundle({"fixtures": fixtures, **{name: arrays(section) for name, section in sections.items()}}, out)
 
 
 def main(argv: list[str] | None = None) -> int:
