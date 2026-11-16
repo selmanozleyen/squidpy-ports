@@ -4,3 +4,6 @@
 [submodule "vendor/SpaGE"]
 	path = vendor/SpaGE
 	url = https://github.com/tabdelaal/SpaGE.git
+[submodule "vendor/Tangram"]
+	path = vendor/Tangram
+	url = https://github.com/broadinstitute/Tangram.git

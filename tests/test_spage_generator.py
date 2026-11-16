@@ -13,6 +13,15 @@ from squidpy_ports.spage import fixtures as F
 from squidpy_ports.spage import generate, upstream
 
 
+@pytest.fixture(scope="session")
+def spage():
+    """The vendored upstream ``SpaGE.main`` module, or a skip if it is not checked out."""
+    try:
+        return upstream.load()
+    except FileNotFoundError as exc:
+        pytest.skip(str(exc))
+
+
 def _frames(data: F.Data) -> tuple[pd.DataFrame, pd.DataFrame]:
     return pd.DataFrame(data.ref, columns=F.GENES), pd.DataFrame(data.query, columns=data.measured)
 

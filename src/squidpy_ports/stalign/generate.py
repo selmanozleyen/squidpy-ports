@@ -2,7 +2,7 @@
 
 Run with::
 
-    hatch run generate:run --out stalign_reference.zarr.zip
+    hatch run stalign:generate --out stalign_reference.zarr.zip
 
 One AnnData in a zipped zarr store: each section a dict of arrays in ``uns``, with its
 provenance, and the fixture parameters in ``uns["fixtures"]``. squidpy's tests download the copy the
@@ -52,7 +52,7 @@ def _pin_determinism() -> None:
         if os.environ.get(var) != "1":
             raise RuntimeError(
                 f"{var} must be 1 before torch is imported, otherwise threaded BLAS "
-                f"reduction order varies run to run. Use `hatch run generate:run`."
+                f"reduction order varies run to run. Use `hatch run stalign:generate`."
             )
     torch.set_num_threads(1)
     matplotlib.use("Agg")

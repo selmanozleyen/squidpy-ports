@@ -42,7 +42,7 @@ From: nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
 
     # squidpy-ports (this repo) supplies upstream PyTorch; the pinned squidpy fork supplies
     # the JAX port. jax[cuda12] gives GPU JAX; the default Linux torch wheel is CUDA-enabled.
-    uv sync --frozen
+    uv sync --frozen --extra stalign
     # Pinned to the SHA that was the tip of feat/experimental-fit-core at authoring time.
     # Change @<sha> to @feat/experimental-fit-core to track the branch instead. nbclient +
     # ipykernel execute the notebooks.
