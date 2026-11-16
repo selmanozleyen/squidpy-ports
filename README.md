@@ -57,7 +57,7 @@ inputs defined in this repository — no upstream data is copied or redistribute
 | `src/squidpy_ports/stalign/generate.py` | Writes the reference bundle, `stalign_reference.zarr.zip`. |
 | `vendor/SpaGE`, `src/squidpy_ports/spage/` | The same for SpaGE; writes `spage_reference.zarr.zip`. |
 | `vendor/Tangram`, `src/squidpy_ports/tangram/` | The same for Tangram; writes `tangram_reference.zarr.zip`. |
-| `src/squidpy_ports/_bundle.py` | Writes a bundle and its provenance, for every method. |
+| `src/squidpy_ports/_common.py` | What every method shares: the pin check and by-path import, the bundle format and its provenance, the generators' CLI, and the bundle comparison the workflow runs. |
 
 Upstream is imported by path rather than installed because its `setup.py` reads
 `requirements.txt` verbatim and pins `numpy==1.23.4` / `torch==2.0.0` / `Pillow==9.5.0`,
@@ -74,15 +74,16 @@ its upstream imports, so each runs in its own environment. CI tests and generate
 its own job, from `uv.lock`:
 
 ```bash
-uv sync --frozen --extra test --extra spage && uv run --no-sync pytest tests/test_spage_generator.py
+uv sync --frozen --extra test --extra spage && uv run --no-sync pytest tests/test_common.py tests/test_spage_generator.py
 ```
 
 To keep the environments side by side locally, give each its own directory with
-`UV_PROJECT_ENVIRONMENT=.venv-spage`, or use the hatch environments of the same names:
-`hatch run spage:test`, `hatch run spage:generate --out spage_reference.zarr.zip`. The hatch
-environments also set the variables the generators require (single-threaded BLAS, and for
-Tangram `PYTHONHASHSEED=0`). `tests/test_<method>_generator.py` guards each generator and needs the
-`vendor/<upstream>` submodule.
+`UV_PROJECT_ENVIRONMENT=.venv-spage`. The hatch environments of the same names are a shortcut,
+`hatch run spage:test` and `hatch run spage:generate --out spage_reference.zarr.zip`, which also set
+the variables the generators require (single-threaded BLAS, and for Tangram `PYTHONHASHSEED=0`), but
+hatch resolves fresh versions rather than reading `uv.lock`. `tests/test_common.py` guards what the
+methods share and needs only the base install; `tests/test_<method>_generator.py` guards each
+generator and needs the `vendor/<upstream>` submodule.
 
 ## Publishing the reference bundle
 
@@ -101,8 +102,7 @@ gh release create stalign-reference-vN stalign_reference.zarr.zip -R theislab/sq
 
 Then point squidpy's `test_stalign_reference.py` at the new URL and the sha256 the workflow
 prints: it pins that one build (provenance timestamps differ between builds, the arrays do not). It runs on ubuntu because BLAS/FFT reduction order
-differs across platforms; `hatch run stalign:generate --out stalign_reference.zarr.zip` writes the
-same store locally.
+differs across platforms. Locally, the workflow's commands write the same store from the same lockfile.
 
 ## SpaGE
 
@@ -120,7 +120,7 @@ returns exactly what `SpaGE()` does, which `tests/test_spage_generator.py` asser
 
 | `uns` key | What it holds |
 | --- | --- |
-| `fixtures` | `SEED`, `N_PV`, `SETTINGS`, the gene names (`genes`, `measured`, `unmeasured`), and the checksum of `spage/fixtures.py`. |
+| `fixtures` | `SEED`, `N_PV`, `COSINE_THRESHOLDS` and `N_NEIGHBORS` (one entry per run), the gene names (`genes`, `measured`, `unmeasured`), and the checksum of `spage/fixtures.py`. |
 | `inputs` | `ref` (300 x 12), `query` (150 x 8, the first 8 genes), and `truth`, the query's true values of the 4 unmeasured genes. The same arrays as `_data()` in squidpy's `test_impute_spage.py`. |
 | `cosine{30,99}_k{20,50,300}` | One run of upstream at `n_pv=3`: `imputed` (150 x 4), `n_pv_used`, `cosine`, `tied_rows`, `cosine_threshold`, `n_neighbors`, and the provenance. |
 

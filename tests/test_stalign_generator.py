@@ -15,15 +15,6 @@ from squidpy_ports.stalign import fixtures as F
 from squidpy_ports.stalign import upstream
 
 
-@pytest.fixture(scope="session")
-def stalign():
-    """The vendored upstream STalign module, or a skip if it is not checked out."""
-    try:
-        return upstream.load()
-    except FileNotFoundError as exc:
-        pytest.skip(str(exc))
-
-
 def test_vendored_upstream_is_pinned(stalign):
     assert hasattr(stalign, "LDDMM")
     assert hasattr(stalign, "rasterize")

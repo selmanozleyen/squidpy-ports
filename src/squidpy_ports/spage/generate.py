@@ -11,15 +11,11 @@ One AnnData in a zipped zarr store, the same format as the STalign bundle: the i
 
 from __future__ import annotations
 
-import argparse
-import os
-from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pandas as pd
 
-from squidpy_ports._bundle import provenance, write_bundle
+from squidpy_ports._common import THREADS, generator_main, provenance
 
 from . import fixtures as F
 from . import upstream
@@ -39,55 +35,21 @@ def build() -> dict[str, Any]:
     """Run upstream on every setting and return the bundle's ``uns``."""
     spage = upstream.load()
     data = F.make_data()
-    ref = pd.DataFrame(data.ref, columns=F.GENES)
-    query = pd.DataFrame(data.query, columns=data.measured)
-
-    uns: dict[str, Any] = {
-        "fixtures": {
-            "checksum": F.checksum(),
-            "SEED": F.SEED,
-            "N_PV": F.N_PV,
-            "SETTINGS": np.asarray(F.SETTINGS),
-            "genes": np.asarray(F.GENES),
-            "measured": np.asarray(data.measured),
-            "unmeasured": np.asarray(data.unmeasured),
-        },
-        "inputs": {"ref": data.ref, "query": data.query, "truth": data.truth},
-    }
+    thresholds, neighbors = zip(*F.SETTINGS, strict=True)
+    uns = data.uns(F, N_PV=F.N_PV, COSINE_THRESHOLDS=np.asarray(thresholds), N_NEIGHBORS=np.asarray(neighbors))
     for cosine_threshold, n_neighbors in F.SETTINGS:
-        imputed, observed = upstream.run(
-            spage,
-            ref,
-            query,
-            data.unmeasured,
-            n_pv=F.N_PV,
-            cosine_threshold=cosine_threshold,
-            n_neighbors=n_neighbors,
-        )
-        uns[section_name(cosine_threshold, n_neighbors)] = {
-            "imputed": imputed[data.unmeasured].to_numpy(),
-            "n_pv_used": observed["n_pv_used"],
-            "cosine": observed["cosine"],
-            "tied_rows": observed["tied_rows"],
-            "cosine_threshold": cosine_threshold,
-            "n_neighbors": n_neighbors,
-            "provenance": provenance(upstream, F, PACKAGES, cosine_threshold=cosine_threshold, n_neighbors=n_neighbors),
+        params = {"cosine_threshold": cosine_threshold, "n_neighbors": n_neighbors}
+        uns[section_name(**params)] = {
+            **upstream.run(spage, data, n_pv=F.N_PV, **params),
+            **params,
+            "provenance": provenance(upstream, F, PACKAGES, **params),
         }
     return uns
 
 
 def main(argv: list[str] | None = None) -> int:
     """Generate the whole bundle."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, required=True, help="the .zarr.zip store to write")
-    args = parser.parse_args(argv)
-
-    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS"):
-        if os.environ.get(var) != "1":
-            raise RuntimeError(f"{var} must be 1 so BLAS reduction order is fixed. Use `hatch run spage:generate`.")
-    write_bundle(build(), args.out)
-    print(f"wrote {args.out}")
-    return 0
+    return generator_main(build, THREADS, argv, __doc__)
 
 
 if __name__ == "__main__":

@@ -95,43 +95,29 @@ scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
 scripts.open = "python -m webbrowser -t docs/_build/html/index.html"
 scripts.clean = "git clean -fdX -- {args:docs}"
 
-# One environment per upstream: `hatch run <method>:generate --out <method>_reference.zarr.zip`
-# writes the bundle squidpy's reference tests download, `hatch run <method>:test` runs its guards.
-[tool.hatch.envs.stalign]
+# One environment per upstream, all from the `ports` template (not meant to be run itself): `hatch run <method>:generate --out
+# <method>_reference.zarr.zip` writes the bundle squidpy's reference tests download, `hatch run
+# <method>:test` runs the guards. The variables are what the generators require: single-threaded BLAS so
+# reduction order is fixed, a non-interactive matplotlib backend because STalign's LDDMM draws
+# unconditionally, and a fixed hash seed because Tangram orders its training genes by iterating a set.
+[tool.hatch.envs.ports]
 installer = "uv"
+features = [ "test" ]
+scripts.generate = "python -m squidpy_ports.{env_name}.generate {args}"
+scripts.test = "pytest tests/test_common.py tests/test_{env_name}_generator.py {args}"
+env-vars = { MKL_NUM_THREADS = "1", MPLBACKEND = "agg", OMP_NUM_THREADS = "1", PYTHONHASHSEED = "0" }
+
+[tool.hatch.envs.stalign]
+template = "ports"
 features = [ "stalign", "test" ]
-scripts.generate = "python -m squidpy_ports.stalign.generate {args}"
-scripts.test = "pytest tests/test_stalign_generator.py {args}"
 
 [tool.hatch.envs.spage]
-installer = "uv"
+template = "ports"
 features = [ "spage", "test" ]
-scripts.generate = "python -m squidpy_ports.spage.generate {args}"
-scripts.test = "pytest tests/test_spage_generator.py {args}"
 
 [tool.hatch.envs.tangram]
-installer = "uv"
+template = "ports"
 features = [ "tangram", "test" ]
-scripts.generate = "python -m squidpy_ports.tangram.generate {args}"
-scripts.test = "pytest tests/test_tangram_generator.py {args}"
-
-# Determinism: single-threaded BLAS/FFT so reduction order is fixed, a non-interactive
-# matplotlib backend because upstream LDDMM draws unconditionally, and a fixed hash seed
-# because Tangram orders its training genes by iterating a set of strings.
-[tool.hatch.envs.stalign.env-vars]
-MKL_NUM_THREADS = "1"
-MPLBACKEND = "agg"
-OMP_NUM_THREADS = "1"
-
-[tool.hatch.envs.spage.env-vars]
-MKL_NUM_THREADS = "1"
-OMP_NUM_THREADS = "1"
-
-[tool.hatch.envs.tangram.env-vars]
-MKL_NUM_THREADS = "1"
-MPLBACKEND = "agg"
-OMP_NUM_THREADS = "1"
-PYTHONHASHSEED = "0"
 
 [tool.ruff]
 line-length = 120

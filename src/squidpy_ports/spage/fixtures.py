@@ -6,13 +6,12 @@ rather than rebuilding them. It depends on **numpy only**.
 
 from __future__ import annotations
 
-import hashlib
-from pathlib import Path
-from typing import NamedTuple
-
 import numpy as np
 
-__all__ = ["GENES", "N_PV", "N_QUERY", "N_REF", "SEED", "SETTINGS", "Data", "checksum", "make_data"]
+from squidpy_ports._common import Imputation
+from squidpy_ports._common import checksum as _checksum
+
+__all__ = ["GENES", "N_PV", "N_QUERY", "N_REF", "SEED", "SETTINGS", "checksum", "make_data"]
 
 SEED = 0
 GENES = [f"g{i}" for i in range(12)]
@@ -30,25 +29,7 @@ N_PV = 3
 SETTINGS = [(t, k) for t in (0.3, 0.99) for k in (20, 50, 300)]
 
 
-class Data(NamedTuple):
-    """Reference and query expression, and the true query values of the unmeasured genes."""
-
-    ref: np.ndarray
-    query: np.ndarray
-    truth: np.ndarray
-
-    @property
-    def measured(self) -> list[str]:
-        """Genes the query measures."""
-        return GENES[:N_MEASURED]
-
-    @property
-    def unmeasured(self) -> list[str]:
-        """Genes the query lacks, which are imputed."""
-        return GENES[N_MEASURED:]
-
-
-def make_data() -> Data:
+def make_data() -> Imputation:
     """Sample reference and query from one rank-3 model, clipped at 0 like expression.
 
     Identical to ``_data()`` in squidpy's ``tests/experimental/test_impute_spage.py``.
@@ -62,9 +43,9 @@ def make_data() -> Data:
 
     query = sample(N_QUERY)
     ref = sample(N_REF)
-    return Data(ref=ref, query=query[:, :N_MEASURED], truth=query[:, N_MEASURED:])
+    return Imputation(ref, query[:, :N_MEASURED], query[:, N_MEASURED:], GENES)
 
 
 def checksum() -> str:
     """SHA-256 of this file, so the bundle can prove which definitions it came from."""
-    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    return _checksum(__file__)

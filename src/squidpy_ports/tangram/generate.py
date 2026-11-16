@@ -12,14 +12,11 @@ One AnnData in a zipped zarr store, the same format as the STalign bundle: the i
 
 from __future__ import annotations
 
-import argparse
-import os
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from squidpy_ports._bundle import provenance, write_bundle
+from squidpy_ports._common import THREADS, generator_main, provenance
 
 from . import fixtures as F
 from . import upstream
@@ -27,7 +24,7 @@ from . import upstream
 __all__ = ["build", "main", "section_name"]
 
 #: Versions recorded in the provenance.
-PACKAGES = ("numpy", "scipy", "torch", "anndata", "scanpy")
+PACKAGES = ("numpy", "pandas", "scipy", "torch", "anndata", "scanpy")
 
 
 def section_name(density_prior: str | None, num_epochs: int) -> str:
@@ -43,28 +40,18 @@ def build() -> dict[str, Any]:
     tg = upstream.load()
     data = F.make_data()
 
-    uns: dict[str, Any] = {
-        "fixtures": {
-            "checksum": F.checksum(),
-            "SEED": F.SEED,
-            "RANDOM_STATE": F.RANDOM_STATE,
-            "LEARNING_RATE": F.LEARNING_RATE,
-            "SETTINGS": np.asarray([prior or "none" for prior in F.SETTINGS]),
-            "EPOCHS": np.asarray(F.EPOCHS),
-            "genes": np.asarray(F.GENES),
-            "measured": np.asarray(data.measured),
-            "unmeasured": np.asarray(data.unmeasured),
-        },
-        "inputs": {"ref": data.ref, "query": data.query, "truth": data.truth},
-    }
+    uns = data.uns(
+        F,
+        RANDOM_STATE=F.RANDOM_STATE,
+        LEARNING_RATE=F.LEARNING_RATE,
+        SETTINGS=np.asarray([prior or "none" for prior in F.SETTINGS]),
+        EPOCHS=np.asarray(F.EPOCHS),
+    )
     for density_prior in F.SETTINGS:
         for num_epochs in F.EPOCHS:
             out = upstream.run(
                 tg,
-                data.ref,
-                data.query,
-                F.GENES,
-                data.measured,
+                data,
                 density_prior=density_prior,
                 num_epochs=num_epochs,
                 learning_rate=F.LEARNING_RATE,
@@ -74,32 +61,19 @@ def build() -> dict[str, Any]:
             for key in ("initial_logits", "training_genes"):
                 value = out.pop(key)
                 np.testing.assert_array_equal(uns["inputs"].setdefault(key, value), value)
+            params = {"density_prior": density_prior or "none", "num_epochs": num_epochs}
             uns[section_name(density_prior, num_epochs)] = {
                 **out,
-                "imputed": out["imputed"][:, len(data.measured) :],
-                "density_prior": density_prior or "none",
-                "num_epochs": num_epochs,
-                "provenance": provenance(
-                    upstream, F, PACKAGES, density_prior=density_prior or "none", num_epochs=num_epochs
-                ),
+                **params,
+                "provenance": provenance(upstream, F, PACKAGES, **params),
             }
     return uns
 
 
 def main(argv: list[str] | None = None) -> int:
     """Generate the whole bundle."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, required=True, help="the .zarr.zip store to write")
-    args = parser.parse_args(argv)
-
-    # threaded BLAS reduction order, and upstream's training genes, ordered by iterating a set of
-    # strings, would otherwise vary run to run
-    for var, value in {"OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "PYTHONHASHSEED": "0"}.items():
-        if os.environ.get(var) != value:
-            raise RuntimeError(f"{var} must be {value}. Use `hatch run tangram:generate`.")
-    write_bundle(build(), args.out)
-    print(f"wrote {args.out}")
-    return 0
+    # upstream orders the training genes by iterating a set of strings
+    return generator_main(build, {**THREADS, "PYTHONHASHSEED": "0"}, argv, __doc__)
 
 
 if __name__ == "__main__":

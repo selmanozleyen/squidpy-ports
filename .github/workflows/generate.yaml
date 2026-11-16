@@ -46,25 +46,7 @@ jobs:
       - name: Check the run is reproducible
         run: |
           uv run --no-sync python -m squidpy_ports.${{ matrix.method }}.generate --out again.zarr.zip
-          uv run --no-sync python - <<'PY'
-          import os
-          import sys
-          import anndata as ad
-          import numpy as np
-          from zarr.storage import ZipStore
-
-          def load(path):
-              with ZipStore(path, mode="r") as store:
-                  return ad.read_zarr(store).uns
-
-          a, b = load(os.environ["BUNDLE"]), load("again.zarr.zip")
-          bad = [f"{name}/{key}" for name, section in a.items() if name != "fixtures"
-                 for key, value in section.items() if key != "provenance"
-                 and not np.array_equal(value, b[name][key])]
-          if bad:
-              sys.exit("not reproducible: " + ", ".join(bad))
-          print("identical arrays across runs")
-          PY
+          uv run --no-sync python -m squidpy_ports._common "$BUNDLE" again.zarr.zip
           sha256sum "$BUNDLE"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
