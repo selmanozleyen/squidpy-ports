@@ -1,3 +1,6 @@
 [submodule "vendor/STalign"]
 	path = vendor/STalign
 	url = https://github.com/JEFworks-Lab/STalign.git
+[submodule "vendor/SpaGE"]
+	path = vendor/SpaGE
+	url = https://github.com/tabdelaal/SpaGE.git

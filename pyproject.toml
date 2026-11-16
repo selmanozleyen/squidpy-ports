@@ -35,6 +35,8 @@ dependencies = [
   "pynrrd",
   "requests",
   "scikit-image",
+  # vendor/SpaGE imports it for PCA and NearestNeighbors.
+  "scikit-learn",
   "scipy",
   # for debug logging (referenced from the issue template)
   "session-info2",
@@ -81,6 +83,8 @@ scripts.clean = "git clean -fdX -- {args:docs}"
 [tool.hatch.envs.generate]
 installer = "uv"
 scripts.run = "python -m squidpy_ports.stalign.generate {args}"
+# Emit spage_reference.zarr.zip, which squidpy's SpaGE reference tests download.
+scripts.spage = "python -m squidpy_ports.spage.generate {args}"
 
 [tool.hatch.envs.generate.env-vars]
 # Determinism: single-threaded BLAS/FFT so reduction order is fixed, and a

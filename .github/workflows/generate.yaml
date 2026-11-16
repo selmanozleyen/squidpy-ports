@@ -1,6 +1,6 @@
 name: Generate reference bundle
 
-# Produces stalign_reference.zarr.zip as a run artifact. A maintainer publishes it as a release
+# Produces stalign_reference.zarr.zip and spage_reference.zarr.zip as run artifacts. A maintainer publishes them as release
 # asset by hand (see README), so this workflow never holds a token that can write.
 #
 # This runs on ubuntu on purpose. Upstream is bit-reproducible on CPU in float64 once
@@ -34,10 +34,12 @@ jobs:
         run: |
           uv sync --frozen
           uv run python -m squidpy_ports.stalign.generate --out stalign_reference.zarr.zip
+          uv run python -m squidpy_ports.spage.generate --out spage_reference.zarr.zip
 
       - name: Check the run is reproducible
         run: |
-          uv run python -m squidpy_ports.stalign.generate --out again.zarr.zip
+          uv run python -m squidpy_ports.stalign.generate --out stalign_again.zarr.zip
+          uv run python -m squidpy_ports.spage.generate --out spage_again.zarr.zip
           uv run python - <<'PY'
           import sys
           import anndata as ad
@@ -48,17 +50,24 @@ jobs:
               with ZipStore(path, mode="r") as store:
                   return ad.read_zarr(store).uns
 
-          a, b = load("stalign_reference.zarr.zip"), load("again.zarr.zip")
-          bad = [f"{name}/{key}" for name, section in a.items() if name != "fixtures"
-                 for key, value in section.items() if key != "provenance"
-                 and not np.array_equal(value, b[name][key])]
+          bad = []
+          for method in ("stalign", "spage"):
+              a, b = load(f"{method}_reference.zarr.zip"), load(f"{method}_again.zarr.zip")
+              bad += [f"{method}:{name}/{key}" for name, section in a.items() if name != "fixtures"
+                      for key, value in section.items() if key != "provenance"
+                      and not np.array_equal(value, b[name][key])]
           if bad:
               sys.exit("not reproducible: " + ", ".join(bad))
           print("identical arrays across runs")
           PY
-          sha256sum stalign_reference.zarr.zip
+          sha256sum stalign_reference.zarr.zip spage_reference.zarr.zip
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: stalign-reference-bundle
           path: stalign_reference.zarr.zip
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: spage-reference-bundle
+          path: spage_reference.zarr.zip

@@ -12,7 +12,7 @@ claims to be without anyone noticing. This repository runs the *original* implem
 — vendored and pinned — and emits the numbers squidpy's tests compare against, so the
 heavyweight reference dependencies never enter squidpy itself.
 
-Currently covers: **STalign** (see [scverse/squidpy#1243]).
+Currently covers: **STalign** (see [scverse/squidpy#1243]) and **SpaGE** ([below](#spage)).
 
 [scverse/squidpy#1243]: https://github.com/scverse/squidpy/issues/1243
 
@@ -40,9 +40,9 @@ what produces the references: the vendored upstream, the generator, and the publ
 
 ## Licensing
 
-This repository is BSD-3-Clause. The vendored upstream at `vendor/STalign` is
-**GPL-3.0** ([`LICENSE.vendor`][license-vendor]) and is included as a git submodule, not
-redistributed as part of any built artifact. Nothing is published to PyPI.
+This repository is BSD-3-Clause. The vendored upstreams are included as git submodules, not
+redistributed as part of any built artifact: `vendor/STalign` is **GPL-3.0** and `vendor/SpaGE` is
+**MIT**, both recorded in [`LICENSE.vendor`][license-vendor]. Nothing is published to PyPI.
 
 The reference bundle holds numerical outputs computed from synthetic, seeded
 inputs defined in this repository — no upstream data is copied or redistributed.
@@ -55,6 +55,7 @@ inputs defined in this repository — no upstream data is copied or redistribute
 | `src/squidpy_ports/stalign/fixtures.py` | Input definitions, shared by the generator and the tests; depends on numpy only. |
 | `src/squidpy_ports/stalign/upstream.py` | Loads upstream by path, asserts the pin, and observes the LDDMM loop. |
 | `src/squidpy_ports/stalign/generate.py` | Writes the reference bundle, `stalign_reference.zarr.zip`. |
+| `vendor/SpaGE`, `src/squidpy_ports/spage/` | The same for SpaGE; writes `spage_reference.zarr.zip`. |
 
 Upstream is imported by path rather than installed because its `setup.py` reads
 `requirements.txt` verbatim and pins `numpy==1.23.4` / `torch==2.0.0` / `Pillow==9.5.0`,
@@ -71,7 +72,8 @@ uv sync --frozen --extra test && uv run pytest
 ```
 
 The same commands CI runs, from `uv.lock`: the environment the bundle is generated in.
-`tests/test_generator.py` guards the generator and needs the `vendor/STalign` submodule.
+`tests/test_generator.py` and `tests/test_spage_generator.py` guard the generators and need the
+`vendor/STalign` and `vendor/SpaGE` submodules.
 
 ## Publishing the reference bundle
 
@@ -91,6 +93,36 @@ Then point squidpy's `test_stalign_reference.py` at the new URL and the sha256 t
 prints: it pins that one build (provenance timestamps differ between builds, the arrays do not). It runs on ubuntu because BLAS/FFT reduction order
 differs across platforms; `hatch run generate:run --out stalign_reference.zarr.zip` writes the
 same store locally.
+
+## SpaGE
+
+squidpy ports SpaGE gene imputation as `squidpy.experimental.tl.impute_spage`. Upstream
+([tabdelaal/SpaGE]) is vendored at `vendor/SpaGE`, pinned to `edd0fb7`, and imported by path: it
+has no `setup.py`, and `main.py` imports its siblings as `SpaGE.*`.
+
+`SpaGE()` hard-codes a cosine threshold of 0.3 and 50 neighbors. `spage.upstream.run` swaps both
+for the length of one call by replacing `PVComputation` and `NearestNeighbors` in `SpaGE.main`'s
+namespace, and observes the number of principal vectors used, the cosine similarities, and the
+query cells whose `n_neighbors`-th neighbor ties with the next one. At the hard-coded settings it
+returns exactly what `SpaGE()` does, which `tests/test_spage_generator.py` asserts.
+
+`spage_reference.zarr.zip` is the same format as the STalign bundle:
+
+| `uns` key | What it holds |
+| --- | --- |
+| `fixtures` | `SEED`, `N_PV`, `SETTINGS`, the gene names (`genes`, `measured`, `unmeasured`), and the checksum of `spage/fixtures.py`. |
+| `inputs` | `ref` (300 x 12), `query` (150 x 8, the first 8 genes), and `truth`, the query's true values of the 4 unmeasured genes. The same arrays as `_data()` in squidpy's `test_impute_spage.py`. |
+| `cosine{30,99}_k{20,50,300}` | One run of upstream at `n_pv=3`: `imputed` (150 x 4), `n_pv_used`, `cosine`, `tied_rows`, `cosine_threshold`, `n_neighbors`, and the provenance. |
+
+The fixture has two reference cells that are zero on every measured gene, so they are at the same
+distance from every query cell. Where they straddle the `n_neighbors`-th neighbor, which one is kept
+is the search backend's choice, so a correct port may differ from upstream on exactly the rows in
+`tied_rows`, and must match it everywhere else.
+
+The workflow publishes it as the `spage-reference-bundle` artifact; release it as for STalign, with a
+`spage-reference-vN` tag.
+
+[tabdelaal/SpaGE]: https://github.com/tabdelaal/SpaGE
 
 ## Contact
 
