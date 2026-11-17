@@ -31,12 +31,19 @@ echo "### ports $(git -C ports rev-parse HEAD) squidpy $(git -C squidpy rev-pars
 ~/.local/bin/uv pip install -q --python "$UV_PROJECT_ENVIRONMENT/bin/python" "./squidpy[jax]" loompy nbclient ipykernel
 PY="$UV_PROJECT_ENVIRONMENT/bin/python"
 
-# The SpaGE tutorial reads two files of upstream's Zenodo archive from its working directory.
-curl -sSL -o spage.zip "https://zenodo.org/api/records/3967291/files/SpaGE%20Datasets.zip/content"
-for f in SSp_exons_matrix.csv osmFISH_SScortex_mouse_all_cells.loom; do
-    unzip -j -q spage.zip "$(unzip -Z1 spage.zip | grep -m1 "/$f\$\|^$f\$")" -d work
-done
-rm spage.zip
+# The SpaGE tutorial reads two files of upstream's Zenodo archive from its working directory. They are
+# extracted once into DATA, on shared storage: a node's /localscratch can be too full to hold them.
+DATA="${SPAGE_DATA:-/ictstr01/boost_ai/users/$USER/spage-data}"
+mkdir -p "$DATA"
+FILES=(SSp_exons_matrix.csv osmFISH_SScortex_mouse_all_cells.loom)
+if [[ ! -f "$DATA/${FILES[1]}" ]]; then
+    curl -sSL -o "$DATA/spage.zip" "https://zenodo.org/api/records/3967291/files/SpaGE%20Datasets.zip/content"
+    for f in "${FILES[@]}"; do
+        unzip -o -j -q "$DATA/spage.zip" "$(unzip -Z1 "$DATA/spage.zip" | grep -m1 "/$f\$\|^$f\$")" -d "$DATA"
+    done
+    rm "$DATA/spage.zip"
+fi
+for f in "${FILES[@]}"; do ln -sfn "$DATA/$f" "work/$f"; done
 
 status=0
 for nb in spage-tutorial tutorial-tangram-with-squidpy; do
