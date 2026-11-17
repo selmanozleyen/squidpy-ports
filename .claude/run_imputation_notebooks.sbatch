@@ -44,6 +44,8 @@ if [[ ! -f "$DATA/${FILES[1]}" ]]; then
     rm "$DATA/spage.zip"
 fi
 for f in "${FILES[@]}"; do ln -sfn "$DATA/$f" "work/$f"; done
+# squidpy's datasets download to `data/` under the working directory; the Tangram ones are 3+ GB
+mkdir -p "$DATA/squidpy-datasets" && ln -sfn "$DATA/squidpy-datasets" work/data
 
 status=0
 for nb in spage-tutorial tutorial-tangram-with-squidpy; do
