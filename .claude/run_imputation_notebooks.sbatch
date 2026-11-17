@@ -57,7 +57,9 @@ nb = nbformat.read(os.environ["NB_SRC"], as_version=4)
 start = time.monotonic()
 try:
     NotebookClient(nb, timeout=None, kernel_name="python3", resources={"metadata": {"path": "work"}}).execute()
-finally:  # a failed notebook is written too, up to the failing cell
+finally:  # a failed notebook is written too, up to the failing cell; without stderr (download progress bars)
+    for cell in nb.cells:
+        cell["outputs"] = [o for o in cell.get("outputs", []) if o.get("name") != "stderr"]
     nbformat.write(nb, os.environ["NB_DST"])
 print(f"### {os.environ['NB_SRC']}: {len(nb.cells)} cells in {time.monotonic() - start:.0f}s")
 for cell in nb.cells:
