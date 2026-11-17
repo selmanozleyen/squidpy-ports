@@ -61,15 +61,3 @@ notebooks/squidpy-api/xenium-heimage
 The one upstream notebook without an equivalent here is `merfish-merfish-alignment-simulation`,
 which fits a section against a synthetically deformed copy of itself rather than against another
 section.
-
-## Imputation
-
-One page per upstream tutorial, written against `impute_spage` and `impute_tangram`; each ends by running the
-pinned upstream on the same inputs.
-
-```{toctree}
-:maxdepth: 1
-
-notebooks/squidpy-api/spage-tutorial
-notebooks/squidpy-api/tutorial-tangram-with-squidpy
-```
