@@ -3,7 +3,7 @@
 squidpy's `experimental.tl.impute_tangram` reimplements [Tangram](https://github.com/broadinstitute/Tangram)'s
 default `mode="cells"` mapping in JAX.
 
-- **[Tangram tutorial with squidpy](notebooks/squidpy-api/tutorial-tangram-with-squidpy.ipynb)** — the cells-mode
+- **[Tangram tutorial](notebooks/squidpy-api/tangram-tutorial.ipynb)** — the cells-mode
   part of upstream's tutorial, which maps mouse cortex scRNA-seq onto a Visium section, written against the
   public API. Each implementation starts from its own random mapping; on the held-out genes both reach a median
   score of 0.455, and their per-gene scores correlate at 0.999.
@@ -21,5 +21,5 @@ squidpy fork to [`f4c0c9a`](https://github.com/selmanozleyen/squidpy/tree/f4c0c9
 :hidden: true
 :maxdepth: 2
 
-Tangram tutorial with squidpy <notebooks/squidpy-api/tutorial-tangram-with-squidpy>
+Tangram tutorial <notebooks/squidpy-api/tangram-tutorial>
 ```

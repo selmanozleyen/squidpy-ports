@@ -48,7 +48,7 @@ for f in "${FILES[@]}"; do ln -sfn "$DATA/$f" "work/$f"; done
 mkdir -p "$DATA/squidpy-datasets" && ln -sfn "$DATA/squidpy-datasets" work/data
 
 status=0
-for nb in spage-tutorial tutorial-tangram-with-squidpy; do
+for nb in spage-tutorial tangram-tutorial; do
     if NB_SRC="ports/docs/notebooks/squidpy-api/$nb.ipynb" NB_DST="$OUT/$nb.ipynb" "$PY" - <<'RUN'; then
 import os, time, nbformat
 from nbclient import NotebookClient
