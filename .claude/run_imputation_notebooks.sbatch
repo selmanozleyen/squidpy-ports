@@ -23,7 +23,7 @@ mkdir -p "$S/work" "$TMPDIR" "$MPLCONFIGDIR" "$UV_CACHE_DIR" "$OUT"
 trap 'rm -rf "$S"' EXIT
 cd "$S"
 
-git clone -q --recurse-submodules -b "$PORTS_REV" https://github.com/selmanozleyen/squidpy-ports.git ports
+git clone -q --recurse-submodules=vendor/SpaGE --recurse-submodules=vendor/Tangram --shallow-submodules -b "$PORTS_REV" https://github.com/selmanozleyen/squidpy-ports.git ports
 git clone -q -b "$SQUIDPY_REV" https://github.com/selmanozleyen/squidpy.git squidpy
 echo "### ports $(git -C ports rev-parse HEAD) squidpy $(git -C squidpy rev-parse HEAD)"
 
